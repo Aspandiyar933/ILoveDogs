@@ -1,27 +1,20 @@
 import React, { useState } from 'react';
 
 const SignupForm = () => {
-  const [formData, setFormData] = useState({
-    name: '',
-    username: '',
-    email: '',
-    password: ''
-  });
-
-  const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-  };
+  const [loading, setLoading] = useState(false); // Added loading state
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setLoading(true); // Set loading state to true when form is submitted
 
     try {
+      const formData = new FormData(e.currentTarget); // Create FormData object from form
       const response = await fetch('http://localhost:3000/api/v1/users/register', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+            'Content-Type': 'multipart/form-data', // Ensure correct Content-Type
         },
-        body: JSON.stringify(formData)
+        body: formData, // Send FormData instead of JSON
       });
 
       if (!response.ok) {
@@ -32,6 +25,8 @@ const SignupForm = () => {
       console.log('User signed up successfully');
     } catch (error) {
       console.error('Error signing up:', error.message);
+    } finally {
+      setLoading(false); // Reset loading state after request is complete
     }
   };
 
@@ -39,21 +34,21 @@ const SignupForm = () => {
     <form onSubmit={handleSubmit}>
       <div>
         <label htmlFor="name">Name:</label>
-        <input type="text" id="name" name="name" value={formData.name} onChange={handleChange} />
+        <input type="text" id="name" name="name" />
       </div>
       <div>
         <label htmlFor="username">Username:</label>
-        <input type="text" id="username" name="username" value={formData.username} onChange={handleChange} />
+        <input type="text" id="username" name="username" />
       </div>
       <div>
         <label htmlFor="email">Email:</label>
-        <input type="email" id="email" name="email" value={formData.email} onChange={handleChange} />
+        <input type="email" id="email" name="email" />
       </div>
       <div>
         <label htmlFor="password">Password:</label>
-        <input type="password" id="password" name="password" value={formData.password} onChange={handleChange} />
+        <input type="password" id="password" name="password" />
       </div>
-      <button type="submit">Sign Up</button>
+      <button type="submit">Sign Up{loading && '...'}</button> {/* Show loading indicator */}
     </form>
   );
 };

@@ -3,15 +3,16 @@ package users
 import (
 	"encoding/json"
 	"errors"
-	"go/token"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/Aspandiyar933/Ilovedogs/auth"
 	"github.com/Aspandiyar933/Ilovedogs/config"
 	"github.com/Aspandiyar933/Ilovedogs/store"
 	"github.com/Aspandiyar933/Ilovedogs/typeslink"
 	"github.com/Aspandiyar933/Ilovedogs/utils"
+	"github.com/golang-jwt/jwt"
 	"github.com/gorilla/mux"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -40,45 +41,68 @@ func (s *UserService) RegisterRoutes(r *mux.Router) {
 }
 
 func (s *UserService) HandleUserLogin(w http.ResponseWriter, r *http.Request) {
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, "Error reading request body", http.StatusBadRequest)
-		return
-	}
-	defer r.Body.Close()
-
-	var user *typeslink.User
-	foundUser, err := s.store.GetUserByEmail(user.Email)
+    body, err := io.ReadAll(r.Body)
     if err != nil {
-		utils.WriteJSON(w, http.StatusUnauthorized, typeslink.ErrorResponse{Error: "User not found"})
+        http.Error(w, "Error reading request body", http.StatusBadRequest)
         return
     }
-	var login *typeslink.LoginRequest
-	err = json.Unmarshal(body, &login)
-	if err != nil {
-		utils.WriteJSON(w, http.StatusBadRequest, typeslink.ErrorResponse{Error: "Invalid request payload!"})
-		return
-	}
+    defer r.Body.Close()
 
-	if err = validateLoginRequestPayload(login); err != nil {
-		utils.WriteJSON(w, http.StatusBadRequest, typeslink.ErrorResponse{Error: err.Error()})
-		return
-	}
-	
-	if err := bcrypt.CompareHashAndPassword([]byte(foundUser.Password), []byte(login.Password)); err != nil {
-		utils.WriteJSON(w, http.StatusUnauthorized, typeslink.ErrorResponse{Error: "Invalid password"})
-		return
-	}
+    var login typeslink.LoginRequest
+    if err := json.Unmarshal(body, &login); err != nil {
+        http.Error(w, "Invalid request payload", http.StatusBadRequest)
+        return
+    }
 
-	token, err :=  createAndSetAuthCoolie(, w)
-	if err != nil {
-		utils.WriteJSON(w, http.StatusInternalServerError, typeslink.ErrorResponse{Error: "Error creating session"})
-		return
-	}
+    foundUser, err := s.store.GetUserByEmail(login.Email)
+    if err != nil {
+        http.Error(w, "User not found", http.StatusUnauthorized)
+        return
+    }
 
-	utils.WriteJSON(w, http.StatusCreated, token)
-	
+    if err := bcrypt.CompareHashAndPassword([]byte(foundUser.Password), []byte(login.Password)); err != nil {
+        http.Error(w, "Invalid password", http.StatusUnauthorized)
+        return
+    }
+
+    token, err := createAndSetAuthCookieL(foundUser.Email, w)
+    if err != nil {
+        http.Error(w, "Error creating session", http.StatusInternalServerError)
+        return
+    }
+
+    // Respond with token
+    utils.WriteJSON(w, http.StatusOK, token)
 }
+
+
+// Assuming createAndSetAuthCookie generates and sets the JWT token
+func createAndSetAuthCookieL(userID string, w http.ResponseWriter) (string, error) {
+	// Generate JWT token with user ID
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"user_id": userID,
+	})
+
+	// Sign the token with a secret
+	secret := []byte(config.Envs.JWTSecret)
+	tokenString, err := token.SignedString(secret)
+	if err != nil {
+		return "", err
+	}
+
+	// Set the JWT token in a cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:     "auth_token",
+		Value:    tokenString,
+		Expires:  time.Now().Add(time.Hour * 24), // Example: token expires in 24 hours
+		HttpOnly: true,
+		Path:     "/",
+		SameSite: http.SameSiteStrictMode,
+	})
+
+	return tokenString, nil
+}
+
 
 func (s *UserService) HandleUserRegister(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(r.Body)

@@ -12,7 +12,7 @@ type Store interface {
 	GetPost(id string) (*typeslink.Post, error)
 	GetUserByID(id string) (*typeslink.User, error)
 	CreateUser(u *typeslink.User) (*typeslink.User, error)
-	GetUserByEmail(email string) (*typeslink.LoginRequest, error)
+	GetUserByEmail(email string) (*typeslink.User, error)
 }
 
 type Storage struct {
@@ -72,21 +72,20 @@ func (s *Storage) GetUserByID(id string) (*typeslink.User, error) {
 	return &u, err
 }
 
-// GetUserByEmail retrieves a login from the database by their email address
-func (s *Storage) GetUserByEmail(email string) (*typeslink.LoginRequest, error) {
-    query := "SELECT id, name, username, email, password FROM users WHERE email = ?"
+func (s *Storage) GetUserByEmail(email string) (*typeslink.User, error) {
+    query := "SELECT id, name, username, email, password FROM Human WHERE email = ?"
 
     row := s.db.QueryRow(query, email)
 
-    var login *typeslink.LoginRequest
+    var user typeslink.User
 
-    err := row.Scan(&login.Email, &login.Password)
+    err := row.Scan(&user.ID, &user.Name, &user.UserName, &user.Email, &user.Password)
     if err != nil {
         if err == sql.ErrNoRows {
-            return nil, errors.New("login not found")
+            return nil, errors.New("user not found")
         }
         return nil, err
     }
-	login.Email = email
-    return login, nil
+
+    return &user, nil
 }
